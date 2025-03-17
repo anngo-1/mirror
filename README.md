@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# mirror - Collaborative Canvas and Text Editor 
 
-## Getting Started
+This is a real-time collaborative canvas and text editor built with Next.js, React, and Socket.IO. It allows multiple users to draw and edit text together in the same session, without any signup required.
 
-First, run the development server:
+**Current Features:**
+
+- **Real-time Collaboration:**  Multiple users can join the same session and see each other's changes instantly. Users can see each other's cursors.
+- **Drawing Canvas:**
+    - Various drawing tools (pencil, eraser, etc.)
+    - Customizable stroke color and width
+    - Zoom and pan functionality
+    - Undo and redo actions
+    - Canvas background color customization
+    - Grid overlay option
+- **Text Editor:**
+    - Integrated text editor for rich text editing
+- **No Signup Required:**  Start collaborating instantly by creating or joining a session.
+
+**Getting Started**
+
+First, run the development server using the node server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+node server.js
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Running in Production**
+
+To run the application in production:
+
+1. **Build the Next.js application:**
+   ```bash
+   npm run build
+   ```
+   This command optimizes the Next.js app for production and creates a `.next` build directory.
+
+2. **Start the Node.js server:**
+   ```bash
+   export NODE_ENV=production
+   npm run start
+   ```
+   This command executes `node server.js`, starting the Node.js server in production mode. The `server.js` file is configured to serve the pre-built Next.js application (created by `npm run build`) when `NODE_ENV` is set to `production`. It also starts the WebSocket server for real-time features.
+
+   **Environment Variable and `NODE_ENV`:**
+
+   The `server.js` file and Next.js use the `NODE_ENV` environment variable to determine the environment the application is running in (development or production).
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Note:** This is currently a rough draft and is under active development. Features and stability are not yet guaranteed.
