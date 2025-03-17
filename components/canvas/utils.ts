@@ -100,8 +100,8 @@ export const smoothLine = (points: Point[]): Point[] => {
 };
 
 // Helper function to draw grid
-export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+export const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number, color: string) => {
+  ctx.strokeStyle = color;
   ctx.lineWidth = 0.5;
 
   const gridSize = 40;
@@ -160,4 +160,3 @@ export const getCursorStyle = (isPanning: boolean, isDrawing: boolean, currentTo
     default: return 'grab';
   }
 };
-

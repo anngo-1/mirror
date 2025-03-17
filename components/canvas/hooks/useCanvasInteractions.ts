@@ -1,19 +1,19 @@
 import { useState, useRef, MouseEvent, WheelEvent, useEffect } from 'react';
 import { Line, Point, DrawingTool, PanOffset } from '../types';
-import { isPointNearLine } from '../utils';
+
 
 interface UseCanvasInteractionsParams {
-    socketRef: React.MutableRefObject<any>;
-    roomId: string;
-    setUndoStack: React.Dispatch<React.SetStateAction<any[]>>;
-    setRedoStack: React.Dispatch<React.SetStateAction<any[]>>;
-    canvasRef: React.RefObject<HTMLCanvasElement | null>;
-    canvasWrapperRef: React.RefObject<HTMLDivElement | null>;
-    canvasSize: { width: number; height: number };
-    historyLoaded: boolean;
-    lines?: Line[]; // Optional lines to use instead of internal state
-    setLines?: React.Dispatch<React.SetStateAction<Line[]>>; // Optional setLines to use instead of internal state
-  }
+  socketRef: React.MutableRefObject<any>;
+  roomId: string;
+  setUndoStack: React.Dispatch<React.SetStateAction<any[]>>;
+  setRedoStack: React.Dispatch<React.SetStateAction<any[]>>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  canvasWrapperRef: React.RefObject<HTMLDivElement | null>;
+  canvasSize: { width: number; height: number };
+  historyLoaded: boolean;
+  lines?: Line[]; // Optional lines to use instead of internal state
+  setLines?: React.Dispatch<React.SetStateAction<Line[]>>; // Optional setLines to use instead of internal state
+}
 export const useCanvasInteractions = ({
   socketRef,
   roomId,
@@ -24,11 +24,11 @@ export const useCanvasInteractions = ({
   canvasSize,
   historyLoaded,
   lines: externalLines,
-  setLines: externalSetLines
+  setLines: externalSetLines,
 }: UseCanvasInteractionsParams) => {
   // Drawing state - either use provided external state or internal state
   const [internalLines, internalSetLines] = useState<Line[]>([]);
-  
+
   // Use external lines and setLines if provided, otherwise use internal state
   const lines = externalLines !== undefined ? externalLines : internalLines;
   const setLines = externalSetLines || internalSetLines;
@@ -37,16 +37,19 @@ export const useCanvasInteractions = ({
   useEffect(() => {
     console.log(`[Canvas] Lines state updated, now has ${lines.length} lines`);
     if (lines.length > 0) {
-      console.log(`[Canvas] First line has ${lines[0].length} points with first point:`, 
-        JSON.stringify(lines[0][0]));
+      console.log(
+        `[Canvas] First line has ${lines[0].length} points with first point:`,
+        JSON.stringify(lines[0][0])
+      );
     }
   }, [lines]);
   const [currentLine, setCurrentLine] = useState<Line>([]);
-  const [eraserPath, setEraserPath] = useState<{x: number, y: number}[]>([]);
+  const [eraserPath, setEraserPath] = useState<{ x: number; y: number }[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentTool, setCurrentTool] = useState<DrawingTool>('pen');
   const [currentWidth, setCurrentWidth] = useState(3);
   const [currentColor, setCurrentColor] = useState('#ffffff');
+  const [eraserRadius, setEraserRadius] = useState(50); // Default radius in pixels
 
   // UI state
   const [isPanning, setIsPanning] = useState(false);
@@ -54,6 +57,7 @@ export const useCanvasInteractions = ({
   const [startPanPoint, setStartPanPoint] = useState({ x: 0, y: 0 });
   const [zoomLevel, setZoomLevel] = useState(1);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [isSpacePanningEnabled, setIsSpacePanningEnabled] = useState(false); // Track space key for panning
 
   // Initialize canvas size - only center on first load, not when zoom changes
   useEffect(() => {
@@ -61,28 +65,47 @@ export const useCanvasInteractions = ({
       if (canvasWrapperRef.current && !historyLoaded) {
         setPanOffset({
           x: (canvasWrapperRef.current.clientWidth - canvasSize.width) / 2,
-          y: (canvasWrapperRef.current.clientHeight - canvasSize.height) / 2
+          y: (canvasWrapperRef.current.clientHeight - canvasSize.height) / 2,
         });
       }
     };
 
     centerCanvas();
 
-    const handleResize = () => {
-      // On resize, maintain relative position rather than re-centering
-      if (canvasWrapperRef.current) {
-        const rect = canvasWrapperRef.current.getBoundingClientRect();
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
+    const handleResize = () => {};
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePanningEnabled(true);
+        e.preventDefault(); // Prevent default spacebar action (like scrolling)
+        canvasWrapperRef.current?.classList.add('space-panning'); // Add class to change cursor
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePanningEnabled(false);
+        setIsPanning(false); // Stop panning when space is released
+        canvasWrapperRef.current?.classList.remove('space-panning'); // Remove class to reset cursor
       }
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [canvasSize, historyLoaded, canvasWrapperRef]);
 
   // Handle eraser action
-  const handleEraserAction = (pos: {x: number, y: number}, isStart: boolean = false) => {
+  const handleEraserAction = (
+    pos: { x: number; y: number },
+    isStart: boolean = false
+  ) => {
     // Add position to eraser path
     if (isStart) {
       setEraserPath([pos]);
@@ -90,7 +113,7 @@ export const useCanvasInteractions = ({
       setEraserPath(prev => [...prev, pos]);
     }
 
-    const threshold = 12 / zoomLevel; // Adjust based on zoom level and desired eraser size
+    const threshold = eraserRadius / zoomLevel; // Scale threshold by zoom level
     let hasChanges = false;
     let newLines: Line[] = [];
 
@@ -109,8 +132,14 @@ export const useCanvasInteractions = ({
         const point = line[i];
         let isPointErased = false;
 
+        // Check against all eraser points within the current threshold
         for (const eraserPoint of eraserPath) {
-          if (isPointNearLine(eraserPoint, [i > 0 ? line[i-1] : point, point], threshold)) { // Check segment before and current point
+          // Calculate distance from point to eraserPoint
+          const dx = point.x - eraserPoint.x;
+          const dy = point.y - eraserPoint.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance <= threshold) {
             isPointErased = true;
             hasChanges = true;
             break;
@@ -168,10 +197,14 @@ export const useCanvasInteractions = ({
     // Store the current mouse position for potential zoom operations
     setLastMousePos({ x: e.clientX, y: e.clientY });
 
-    // Middle mouse button or Alt+click for panning
-    if (e.button === 1 || (e.altKey && e.button === 0)) {
+    // Spacebar + left mouse button for panning
+    if (isSpacePanningEnabled && e.button === 0) {
       setIsPanning(true);
       setStartPanPoint({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    // Disable middle mouse button panning
+    if (e.button === 1) {
       return;
     }
 
@@ -359,6 +392,7 @@ export const useCanvasInteractions = ({
     link.click();
   };
 
+  // Add lastMousePos to the returned props
   return {
     lines,
     setLines,
@@ -373,7 +407,9 @@ export const useCanvasInteractions = ({
     isPanning,
     panOffset,
     zoomLevel,
-    lastMousePos,
+    eraserRadius,
+    setEraserRadius,
+    lastMousePos, // Ensure this is included
     handleMouseDownCanvas,
     handleMouseMoveCanvas,
     handleMouseUpCanvas,

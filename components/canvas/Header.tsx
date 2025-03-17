@@ -1,5 +1,7 @@
 import React from 'react';
 import styles from './styles';
+import UserPresence from './UserPresence';
+import { RoomUser } from './hooks/useUserPresence';
 
 interface HeaderProps {
   roomId: string;
@@ -10,6 +12,8 @@ interface HeaderProps {
   onClearCanvas: () => void;
   onResetView: () => void;
   onExport: () => void;
+  users: RoomUser[];
+  currentUser: RoomUser | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -20,7 +24,9 @@ const Header: React.FC<HeaderProps> = ({
   onRedo,
   onClearCanvas,
   onResetView,
-  onExport
+  onExport,
+  users,
+  currentUser
 }) => {
   return (
     <div style={styles.header}>
@@ -31,6 +37,10 @@ const Header: React.FC<HeaderProps> = ({
         <div style={styles.logo}>
           <span style={styles.logoText}>mirror</span>
         </div>
+      </div>
+      
+      <div style={styles.userPresence}>
+        <UserPresence users={users} currentUser={currentUser} />
       </div>
 
       <div style={styles.roomInfo}>

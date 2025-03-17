@@ -8,6 +8,21 @@
   --background-end-rgb: 255, 255, 255;
 }
 
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
@@ -17,6 +32,8 @@
 }
 
 html, body {
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   height: 100vh;
   color: rgb(var(--foreground-rgb));
@@ -32,3 +49,5 @@ html, body {
 .quill > .ql-toolbar:first-child {
   display: none !important;
 }
+
+

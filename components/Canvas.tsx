@@ -5,6 +5,9 @@ import { useSocketConnection } from './canvas/hooks/useSocketConnection';
 import { useCanvasInteractions } from './canvas/hooks/useCanvasInteractions';
 import { useUndoRedo } from './canvas/hooks/useUndoRedo';
 import { useEditor } from './canvas/hooks/useEditor';
+import { useUserPresence } from './canvas/hooks/useUserPresence';
+import { useCursorTracking } from './canvas/hooks/useCursorTracking';
+import RemoteCursors from './canvas/RemoteCursors';
 import Header from './canvas/Header';
 import Toolbox from './canvas/Toolbox';
 import DrawingCanvas from './canvas/DrawingCanvas';
@@ -26,6 +29,11 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
   
   // CRITICAL: This is the shared state that BOTH socket and canvas interactions use
   const [linesState, setLinesState] = useState<Line[]>([]);
+  
+  // New state for canvas background and grid
+  const [backgroundColor, setBackgroundColor] = useState('#000000');
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridColor, setGridColor] = useState('rgba(255, 255, 255, 0.1)');
 
   // Initialize editor hooks
   const {
@@ -70,8 +78,14 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
     quillRef,
     setIsSocketUpdate
   });
+  
+  // Initialize user presence tracking
+  const { users, currentUser } = useUserPresence({
+    socket,
+    roomId
+  });
 
-  // Now use canvas interactions with shared state
+  // Initialize canvas interactions first to get panOffset and zoomLevel
   const {
     currentLine,
     currentTool,
@@ -81,7 +95,10 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
     setCurrentColor,
     isPanning,
     panOffset,
+    lastMousePos,
     zoomLevel,
+    eraserRadius,
+    setEraserRadius,
     handleMouseDownCanvas,
     handleMouseMoveCanvas,
     handleMouseUpCanvas,
@@ -131,6 +148,17 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
     };
   }, [dragging]);
 
+  // Initialize cursor tracking after canvas interactions
+  const { cursors } = useCursorTracking({
+    socket,
+    roomId,
+    currentUser,
+    users,
+    containerRef: canvasWrapperRef,
+    panOffset,
+    zoomLevel
+  });
+
   // Debug logging when lines state changes
   useEffect(() => {
     console.log(`[Canvas.tsx] linesState updated, now has ${linesState.length} lines`);
@@ -153,6 +181,8 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
           onClearCanvas={handleClearCanvas}
           onResetView={handleResetView}
           onExport={handleExport}
+          users={users}
+          currentUser={currentUser}
         />
 
         {/* Main Content */}
@@ -163,11 +193,20 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
               currentColor={currentColor}
               currentWidth={currentWidth}
               zoomLevel={zoomLevel}
-              onToolSelect={handleToolSelect}
-              onColorChange={setCurrentColor}
-              onWidthChange={setCurrentWidth}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
+              eraserRadius={eraserRadius}
+              setEraserRadius={setEraserRadius}
+            onToolSelect={handleToolSelect}
+            onColorChange={setCurrentColor}
+            onWidthChange={setCurrentWidth}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+              // New props for background and grid
+              backgroundColor={backgroundColor}
+              onBackgroundColorChange={setBackgroundColor}
+              showGrid={showGrid}
+              onToggleGrid={setShowGrid}
+              gridColor={gridColor}
+              onGridColorChange={setGridColor}
             />
 
             <DrawingCanvas
@@ -181,11 +220,28 @@ const Canvas: React.FC<CanvasProps> = ({ roomId, socket }) => {
               currentTool={currentTool}
               panOffset={panOffset}
               zoomLevel={zoomLevel}
+              // New props for background and grid
+              backgroundColor={backgroundColor}
+              showGrid={showGrid}
+              gridColor={gridColor}
               handleMouseDownCanvas={handleMouseDownCanvas}
               handleMouseMoveCanvas={handleMouseMoveCanvas}
               handleMouseUpCanvas={handleMouseUpCanvas}
               handleMouseWheel={handleMouseWheel}
+              eraserRadius={eraserRadius}
+              lastMousePos={lastMousePos}
             />
+            
+            {/* Remote cursors - condi onally render when containerRef is available */}
+            {canvasWrapperRef.current && (
+              <RemoteCursors 
+                cursors={cursors || {}} 
+                users={users} 
+                containerRef={canvasWrapperRef} 
+                panOffset={panOffset}
+                zoomLevel={zoomLevel}
+              />
+            )}
           </div>
 
           <div

@@ -2,7 +2,18 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CSSProperties } from 'react'; // Import CSSProperties
+import { 
+  MantineProvider, 
+  Paper, 
+  Stack, 
+  Title, 
+  Button, 
+  TextInput, 
+  Divider, 
+  Text, 
+  Box,
+} from '@mantine/core';
+import '@mantine/core/styles.css';
 
 export default function HomePage() {
   const [roomId, setRoomId] = useState('');
@@ -28,184 +39,121 @@ export default function HomePage() {
   };
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.logoText}>mirror</h1>
-      </header>
-
-      <div style={styles.card}>
-        <h2 style={styles.cardTitle}>Start Collaborating</h2>
-
-        <button
-          style={isCreating ? {...styles.primaryButton, ...styles.buttonLoading} : styles.primaryButton}
-          onClick={createRoom}
-          disabled={isCreating || isJoining}
+    <MantineProvider>
+      <Box
+        style={{
+          width: '100%',
+          height: '100vh',
+          backgroundColor: '#080820',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          color: 'white',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}
+      >
+        <Title
+          order={1}
+          style={{
+            color: '#06d6a0',
+            fontWeight: 700,
+            fontSize: '38px',
+            letterSpacing: '1px',
+            fontFamily: 'Inter, monospace',
+            marginBottom: '30px',
+          }}
         >
-          {isCreating ? (
-            <span style={styles.loadingText}>
-              Creating...
-            </span>
-          ) : (
-            'Create New Session'
-          )}
-        </button>
+          mirror
+        </Title>
 
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>OR</span>
-        </div>
+        <Paper
+          p="xl"
+          radius="md"
+          style={{
+            width: '100%',
+            maxWidth: '500px',
+            backgroundColor: 'rgba(25, 25, 50, 0.7)',
+            padding: '40px',
+          }}
+        >
+          <Stack gap="md">
+            <Title order={2} ta="center" fw={600} size="22px" mb="md">
+              Start Collaborating
+            </Title>
 
-        <div style={styles.inputGroup}>
-          <input
-            style={styles.input}
-            type="text"
-            placeholder="Enter Session ID"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            disabled={isCreating || isJoining}
-          />
-          <button
-            style={isJoining ? {...styles.secondaryButton, ...styles.buttonLoading} : styles.secondaryButton}
-            onClick={joinRoom}
-            disabled={isCreating || isJoining || roomId.trim() === ''}
-          >
-            {isJoining ? (
-              <span style={styles.loadingText}>
-                Joining...
-              </span>
-            ) : (
-              'Join Session'
-            )}
-          </button>
-        </div>
-      </div>
+            <Button
+              color="teal"
+              loading={isCreating}
+              disabled={isCreating || isJoining}
+              onClick={createRoom}
+              fullWidth
+              size="md"
+              style={{ 
+                backgroundColor: '#06d6a0', 
+                color: '#13132a',
+                fontWeight: 600,
+              }}
+            >
+              {isCreating ? 'Creating...' : 'Create New Session'}
+            </Button>
 
-      <footer style={styles.footer}>
-        <p style={styles.footerText}>
+            <Divider 
+              label="OR" 
+              labelPosition="center"
+              c="dimmed"
+              my="xs"
+            />
+
+            <TextInput
+              placeholder="Enter Session ID"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              disabled={isCreating || isJoining}
+              size="md"
+              styles={{
+                input: {
+                  backgroundColor: 'rgba(19, 19, 42, 0.6)',
+                  color: 'white',
+                  border: '1px solid rgba(6, 214, 160, 0.3)',
+                  borderRadius: '8px',
+                  padding: '14px 19px',
+                  fontSize: '16px',
+                },
+              }}
+            />
+
+            <Button
+              variant="outline"
+              loading={isJoining}
+              disabled={isCreating || isJoining || roomId.trim() === ''}
+              onClick={joinRoom}
+              fullWidth
+              size="md"
+              style={{
+                backgroundColor: 'rgba(6, 214, 160, 0.15)',
+                color: '#06d6a0',
+                borderColor: 'rgba(6, 214, 160, 0.3)',
+                fontWeight: 500,
+              }}
+            >
+              {isJoining ? 'Joining...' : 'Join Session'}
+            </Button>
+          </Stack>
+        </Paper>
+
+        <Text
+          size="sm"
+          c="dimmed"
+          style={{
+            marginTop: '20px',
+            color: 'rgba(255, 255, 255, 0.7)',
+          }}
+        >
           Collaborate in a text editor and canvas with no signup required.
-        </p>
-      </footer>
-    </div>
+        </Text>
+      </Box>
+    </MantineProvider>
   );
 }
-
-const styles: Record<string, CSSProperties> = { // Explicitly type styles
-  container: {
-    width: '100%',
-    height: '100vh',
-    backgroundColor: '#080820', // Darker background color
-    color: '#fff',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px',
-  },
-  header: {
-    padding: '20px',
-    textAlign: 'center',
-  },
-  logoText: {
-    margin: 0,
-    fontWeight: '700',
-    fontSize: '38px',
-    color: '#06d6a0',
-    letterSpacing: '1px',
-    fontFamily: 'Inter, monospace',
-  },
-  card: {
-    width: '100%',
-    maxWidth: '500px',
-    backgroundColor: 'rgba(25, 25, 50, 0.7)',
-    borderRadius: '16px',
-    padding: '40px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: '22px',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  primaryButton: {
-    padding: '14px 20px',
-    backgroundColor: '#06d6a0',
-    color: '#13132a',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: '600',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  secondaryButton: {
-    padding: '14px 20px',
-    backgroundColor: 'rgba(6, 214, 160, 0.15)',
-    color: '#06d6a0',
-    border: '1px solid rgba(6, 214, 160, 0.3)',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: '500',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  buttonLoading: {
-    opacity: 0.8,
-    cursor: 'not-allowed',
-  },
-  loadingText: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-  },
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    width: '100%',
-  },
-  input: {
-    padding: '14px 19px',
-    backgroundColor: 'rgba(19, 19, 42, 0.6)',
-    color: '#fff',
-    border: '1px solid rgba(6, 214, 160, 0.3)',
-    borderRadius: '8px',
-    outline: 'none',
-    width: '100%',
-    fontSize: '16px',
-    boxSizing: 'border-box',
-  },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    margin: '2px 0',
-  },
-  dividerLine: {
-    width: '100%',
-    height: '1px',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  dividerText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
-    fontSize: '14px',
-    padding: '0 15px',
-    backgroundColor: 'rgba(25, 25, 50, 0.7)',
-  },
-  footer: {
-    padding: '10px',
-    textAlign: 'center',
-  },
-  footerText: {
-    fontSize: '14px',
-    color: 'rgba(255, 255, 255, 0.7)',
-    margin: 0,
-  },
-};

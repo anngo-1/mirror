@@ -1,24 +1,35 @@
 import React, { useEffect, useState, WheelEvent } from 'react';
+import { 
+  Text, 
+  List, 
+  Button, 
+  Modal,
+} from '@mantine/core';
 import { DrawingTool, Line } from './types';
-import { getCursorStyle, drawLines, drawGrid } from './utils';
-import styles from './styles';
+import { getCursorStyle } from './utils';
 
 interface DrawingCanvasProps {
-    canvasRef: React.RefObject<HTMLCanvasElement | null>;
-    canvasWrapperRef: React.RefObject<HTMLDivElement | null>;
-    canvasSize: { width: number; height: number };
-    lines: Line[];
-    currentLine: Line;
-    isPanning: boolean;
-    isDrawing: boolean;
-    currentTool: DrawingTool;
-    panOffset: { x: number; y: number };
-    zoomLevel: number;
-    handleMouseDownCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
-    handleMouseMoveCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
-    handleMouseUpCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
-    handleMouseWheel: (e: WheelEvent<HTMLDivElement>) => void;
-  }
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  canvasWrapperRef: React.RefObject<HTMLDivElement | null>;
+  canvasSize: { width: number; height: number };
+  lines: Line[];
+  currentLine: Line;
+  isPanning: boolean;
+  isDrawing: boolean;
+  currentTool: DrawingTool;
+  panOffset: { x: number; y: number };
+  zoomLevel: number;
+  eraserRadius: number;
+  lastMousePos: { x: number; y: number };
+  backgroundColor?: string; // New prop for background color
+  showGrid?: boolean; // New prop for showing grid
+  gridColor?: string; // New prop for grid color
+  handleMouseDownCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  handleMouseMoveCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  handleMouseUpCanvas: (e: React.MouseEvent<HTMLCanvasElement>) => void;
+  handleMouseWheel: (e: WheelEvent<HTMLDivElement>) => void;
+}
+
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   canvasRef,
   canvasWrapperRef,
@@ -30,20 +41,36 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   currentTool,
   panOffset,
   zoomLevel,
+  eraserRadius,
+  lastMousePos,
+  backgroundColor = '#000000',
+  showGrid = false,
+  gridColor = 'rgba(255, 255, 255, 0.1)',
   handleMouseDownCanvas,
   handleMouseMoveCanvas,
   handleMouseUpCanvas,
   handleMouseWheel
 }) => {
   const [showTipModal, setShowTipModal] = useState(true);
-
-  // Auto-close the tip modal
+  const [clientMousePos, setClientMousePos] = useState({ x: 0, y: 0 });
+  
+  // Track mouse position with client coordinates
   useEffect(() => {
-    const timer = setTimeout(() => setShowTipModal(false), 5000);
-    return () => clearTimeout(timer);
+    const trackMouse = (e: MouseEvent) => {
+      setClientMousePos({ x: e.clientX, y: e.clientY });
+      console.log("Mouse moved:", e.clientX, e.clientY);
+    };
+    
+    // Immediately set initial position
+    if (typeof window !== 'undefined') {
+      setClientMousePos({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    }
+    
+    window.addEventListener('mousemove', trackMouse);
+    return () => window.removeEventListener('mousemove', trackMouse);
   }, []);
 
-  // Function to smooth lines using the Catmull-Rom spline algorithm - COPIED DIRECTLY FROM WORKING EXAMPLE
+  // Function to smooth lines using the Catmull-Rom spline algorithm
   const smoothLine = (points: Line): Line => {
     if (points.length < 3) return points;
 
@@ -94,9 +121,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     return smoothed;
   };
 
-  // Helper function to draw grid - COPIED DIRECTLY FROM WORKING EXAMPLE
+  // Helper function to draw grid
   const drawGridDirectly = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    // Skip drawing grid if disabled
+    if (!showGrid) return;
+    
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 0.5;
 
     const gridSize = 40;
@@ -115,7 +145,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     }
   };
 
-  // Helper function to draw lines - COPIED DIRECTLY FROM WORKING EXAMPLE
+  // Helper function to draw lines
   const drawLinesDirectly = (ctx: CanvasRenderingContext2D, lines: Line[]) => {
     console.log(`DRAWING ${lines.length} LINES DIRECTLY WITH OUR NEW FUNCTION`);
     
@@ -146,7 +176,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     });
   };
 
-  // Canvas drawing logic - COMPLETELY copied from working example
+  // Canvas drawing logic
   useEffect(() => {
     console.log(`[CRITICAL] DrawingCanvas useEffect triggered with ${lines.length} lines`);
     
@@ -170,14 +200,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Draw premium background gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#111122');
-    gradient.addColorStop(1, '#1a1a2e');
-    ctx.fillStyle = gradient;
+    // Draw background with selected color
+    ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Add subtle grid pattern
+    // Add grid pattern if enabled
     drawGridDirectly(ctx, canvas.width, canvas.height);
 
     // Check if lines exist and log details
@@ -216,17 +243,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       });
       ctx.stroke();
     }
-  }, [lines, currentLine, canvasSize]);
+  }, [lines, currentLine, canvasSize, showGrid, gridColor, backgroundColor]);
 
   return (
     <div
       ref={canvasWrapperRef}
-      style={styles.canvasWrapper}
+      className="relative w-full h-full overflow-hidden bg-[#080820]"
       onWheel={handleMouseWheel}
     >
+      {/* Note: For 50% zoom, the default zoomLevel would need to be 0.5 in the parent component */}
       <div
+        className="absolute top-0 left-0"
         style={{
-          ...styles.canvasContainer,
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
           transformOrigin: '0 0',
           cursor: getCursorStyle(isPanning, isDrawing, currentTool)
@@ -234,7 +262,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       >
         <canvas
           ref={canvasRef}
-          style={styles.canvas}
+          className="block"
           onMouseDown={handleMouseDownCanvas}
           onMouseMove={handleMouseMoveCanvas}
           onMouseUp={handleMouseUpCanvas}
@@ -243,26 +271,127 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           height={canvasSize.height}
         />
       </div>
-
-      {showTipModal && (
-        <div style={styles.tipModal}>
-          <div style={styles.tipModalContent}>
-            <h3 style={styles.tipTitle}>Pro Tips 🎨</h3>
-            <ul style={styles.tipList}>
-              <li>Use the <strong>pen tool</strong> for smooth vector-like drawing</li>
-              <li>Use the <strong>eraser tool</strong> to remove lines</li>
-              <li>Hold <strong>Alt + Drag</strong> to pan around</li>
-              <li>Use <strong>mouse wheel</strong> to zoom in/out</li>
-              <li>Press <strong>Ctrl+Z</strong> to undo</li>
-            </ul>
-            <button style={styles.tipCloseButton} onClick={() => setShowTipModal(false)}>
-              Got it!
-            </button>
-          </div>
-        </div>
+      
+      {/* Eraser cursor - Only visible with delete tool */}
+      {currentTool === 'delete' && (
+        <>
+          {/* Outer ring - visible on both dark and light backgrounds with thicker border */}
+          <div 
+            style={{
+              position: 'fixed',
+              left: `${clientMousePos.x}px`,
+              top: `${clientMousePos.y}px`,
+              width: `${eraserRadius * 2 + 8}px`,
+              height: `${eraserRadius * 2 + 8}px`,
+              border: '4px solid rgba(0, 0, 0, 0.8)',
+              borderRadius: '50%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 99998,
+              boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.8)'
+            }}
+          />
+          {/* Inner circle with gradient */}
+          <div 
+            style={{
+              position: 'fixed',
+              left: `${clientMousePos.x}px`,
+              top: `${clientMousePos.y}px`,
+              width: `${eraserRadius * 2}px`,
+              height: `${eraserRadius * 2}px`,
+              background: 'radial-gradient(circle, rgba(65, 185, 255, 0.3) 0%, rgba(65, 105, 225, 0.5) 100%)',
+              borderRadius: '50%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 99999
+            }}
+          />
+        </>
       )}
 
-      <div style={styles.panInstructions}>
+      {/* Tip Modal */}
+      <Modal
+        opened={showTipModal}
+        onClose={() => setShowTipModal(false)}
+        title="Pro Tips 🎨"
+        centered
+        overlayProps={{
+          color: '#080820',
+          opacity: 0.7,
+          blur: 3
+        }}
+        styles={{
+          root: {
+            '--modal-bg': '#13132a'
+          },
+          header: {
+            backgroundColor: '#13132a',
+            borderBottom: 'none'
+          },
+          title: {
+            fontWeight: 700,
+            fontSize: '1.25rem',
+            color: '#06d6a0'
+          },
+          body: {
+            backgroundColor: '#13132a',
+            color: 'white'
+          },
+          close: {
+            color: '#06d6a0',
+            '&:hover': {
+              backgroundColor: 'rgba(6, 214, 160, 0.1)'
+            }
+          },
+          content: {
+            backgroundColor: '#13132a',
+            border: '1px solid rgba(6, 214, 160, 0.2)',
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.5)'
+          },
+          inner: {
+            padding: '20px 0'
+          }
+        }}
+      >
+        <List
+          spacing="xs"
+          size="sm"
+          center
+          styles={{
+            item: { color: 'white' },
+            itemWrapper: { backgroundColor: '#13132a' },
+            itemLabel: { color: 'white' }
+          }}
+        >
+          <List.Item>Use the <Text span fw={700} c="#06d6a0">pen tool</Text> for smooth vector-like drawing</List.Item>
+          <List.Item>Use the <Text span fw={700} c="#06d6a0">eraser tool</Text> to remove lines</List.Item>
+          <List.Item>Hold <Text span fw={700} c="#06d6a0">Alt + Drag</Text> to pan around</List.Item>
+          <List.Item>Use the <Text span fw={700} c="#06d6a0">mouse wheel</Text> to zoom in/out</List.Item>
+          <List.Item>Press <Text span fw={700} c="#06d6a0">Ctrl+Z</Text> to undo</List.Item>
+          <List.Item>Change <Text span fw={700} c="#06d6a0">background & grid</Text> in the toolbox</List.Item>
+        </List>
+        
+        <Button
+          onClick={() => setShowTipModal(false)}
+          mt="md"
+          fullWidth
+          styles={{
+            root: {
+              backgroundColor: '#06d6a0',
+              color: '#13132a',
+              fontWeight: 600,
+              '&:hover': {
+                backgroundColor: '#05c090'
+              }
+            }
+          }}
+        >
+          Got it!
+        </Button>
+      </Modal>
+
+      {/* Pan instructions */}
+      <div className="absolute bottom-2.5 left-1/2 transform -translate-x-1/2 py-2 px-4 bg-black/40 text-white/70 rounded text-xs pointer-events-none opacity-70">
         Hold Alt + Drag to pan, scroll to zoom
       </div>
     </div>

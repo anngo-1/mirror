@@ -12,6 +12,10 @@ const handle = app.getRequestHandler();
 const roomHistories = {};
 const roomTexts = {};
 const roomTextVersions = {};
+const roomUsers = {}; // Track users in each room with their assigned numbers
+const roomUserIds = {}; // Map socket IDs to user numbers for consistency
+const roomNextUserNumber = {}; // Track the next available user number for each room
+const roomCursors = {}; // Track cursor positions for each user
 
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
@@ -38,6 +42,8 @@ app.prepare().then(() => {
   const activeRooms = new Set();
 
   io.on('connection', (socket) => {
+    // Store user object for this socket
+    let currentUser = null;
     socket.on('joinRoom', (roomId) => {
       // leave any previous rooms
       for (const room of socket.rooms) {
@@ -51,6 +57,17 @@ app.prepare().then(() => {
 
       // store the current room on socket
       socket.currentRoom = roomId;
+
+      // Initialize room users if it doesn't exist
+      if (!roomUsers[roomId]) {
+        roomUsers[roomId] = [];
+      }
+
+      // Send the list of current users in the room to the newly joined client
+      socket.emit('usersInRoom', {
+        roomId,
+        users: roomUsers[roomId]
+      });
 
       // initialize room history if it doesn't exist
       if (!roomHistories[roomId]) {
@@ -248,13 +265,144 @@ app.prepare().then(() => {
         console.error('[Error] Undo/redo event:', err.message);
       }
     });
+    
+    // Handle cursor position updates
+    socket.on('cursorPosition', (data) => {
+      try {
+        const roomId = data.roomId || socket.currentRoom;
+        if (!roomId) return;
+        
+        // Initialize room cursors if it doesn't exist
+        if (!roomCursors[roomId]) {
+          roomCursors[roomId] = {};
+        }
+        
+        // Store absolute canvas coordinates
+        roomCursors[roomId][socket.id] = {
+          x: data.canvasX,
+          y: data.canvasY,
+          userId: socket.id
+        };
+        
+        // Broadcast to other clients
+        socket.to(roomId).emit('cursorUpdate', {
+          roomId,
+          userId: socket.id,
+          canvasX: data.canvasX,
+          canvasY: data.canvasY
+        });
+      } catch (err) {
+        console.error('[Error] Cursor position event:', err.message);
+      }
+    });
+
+    // Handle user presence
+    socket.on('userPresence', (data) => {
+      try {
+        const roomId = data.roomId || socket.currentRoom;
+        if (!roomId) return;
+
+        // Initialize room tracking structures if they don't exist
+        if (!roomUsers[roomId]) roomUsers[roomId] = [];
+        if (!roomUserIds[roomId]) roomUserIds[roomId] = {};
+        if (!roomNextUserNumber[roomId]) roomNextUserNumber[roomId] = 1;
+
+        let userNumber;
+        let isNewUser = false;
+
+        // Check if this user already exists in this room
+        if (roomUserIds[roomId][socket.id]) {
+          // Existing user, use their assigned number
+          userNumber = roomUserIds[roomId][socket.id];
+          console.log(`[Server] Existing user ${socket.id} has number ${userNumber}`);
+        } else {
+          // New user, assign the next available number
+          userNumber = roomNextUserNumber[roomId]++;
+          roomUserIds[roomId][socket.id] = userNumber;
+          isNewUser = true;
+          console.log(`[Server] Assigned number ${userNumber} to new user ${socket.id}`);
+        }
+
+        // Create the user object with server-assigned number
+        const serverUser = {
+          id: socket.id,
+          name: `User ${userNumber}`,
+          color: data.user.color,
+          number: userNumber // Add the user number to the object for reference
+        };
+
+        // Store as current user
+        currentUser = serverUser;
+
+        // Update or add the user in the room's user list
+        const existingIndex = roomUsers[roomId].findIndex(u => u.id === socket.id);
+        if (existingIndex >= 0) {
+          roomUsers[roomId][existingIndex] = serverUser;
+        } else {
+          roomUsers[roomId].push(serverUser);
+        }
+
+        // Send the complete list of users to ALL clients in the room to ensure consistency
+        io.to(roomId).emit('usersInRoom', {
+          roomId,
+          users: roomUsers[roomId]
+        });
+
+        // If this is a new user, also emit the userJoined event
+        if (isNewUser) {
+          socket.to(roomId).emit('userJoined', {
+            roomId,
+            user: serverUser
+          });
+        }
+
+        console.log(`User in room ${roomId}: ${serverUser.name} (${socket.id})`);
+        console.log(`Room ${roomId} now has ${roomUsers[roomId].length} users`);
+      } catch (err) {
+        console.error('[Error] User presence event:', err.message);
+      }
+    });
 
     socket.on('disconnect', () => {
       const roomId = socket.currentRoom;
       if (roomId) {
+        // Remove user from the room's user list
+        if (roomUsers[roomId] && currentUser) {
+          // Filter out the disconnected user
+          roomUsers[roomId] = roomUsers[roomId].filter(u => u.id !== socket.id);
+          
+        // Remove the user's cursor
+        if (roomCursors[roomId]) {
+          delete roomCursors[roomId][socket.id];
+        }
+        
+        // We keep their user number assigned in roomUserIds in case they reconnect
+        // We do NOT release user numbers to avoid confusion during reconnection
+          
+          // Notify others that a user left
+          socket.to(roomId).emit('userLeft', {
+            roomId,
+            userId: socket.id
+          });
+          
+          // Update all clients with the new user list
+          socket.to(roomId).emit('usersInRoom', {
+            roomId,
+            users: roomUsers[roomId]
+          });
+          
+          console.log(`User left room ${roomId}: ${currentUser.name} (${socket.id})`);
+          console.log(`Room ${roomId} now has ${roomUsers[roomId].length} users`);
+        }
+
         const roomSockets = io.sockets.adapter.rooms.get(roomId);
         if (!roomSockets || roomSockets.size === 0) {
           activeRooms.delete(roomId);
+          
+          // If the room is completely empty, clean up room-specific data
+          // But keep history and text for when users return
+          delete roomUserIds[roomId];
+          delete roomNextUserNumber[roomId];
         }
         console.log(`Client disconnected from room: ${roomId}, Socket ID: ${socket.id}`);
       }

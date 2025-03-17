@@ -19,10 +19,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: '#27274a', // Even lighter
     borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
     boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)',
     backdropFilter: 'blur(10px)',
+    position: 'relative',
   },
   headerLeft: {
     display: 'flex',
@@ -59,6 +59,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+    position: 'absolute',
+    left: '50%',
+    transform: 'translateX(-50%)',
   },
   roomLabel: {
     fontSize: '14px',
@@ -73,9 +76,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: '1px solid rgba(6, 214, 160, 0.3)',
     boxShadow: '0 0 15px rgba(6, 214, 160, 0.1)',
   },
+  userPresence: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+  },
   actions: {
     display: 'flex',
     gap: '10px',
+    marginLeft: '15px',
   },
   actionButton: {
     padding: '8px 12px',
