@@ -1,6 +1,5 @@
-# mirror - Collaborative Canvas and Text Editor 
-
-This is a real-time collaborative canvas and text editor built with Next.js, React, and Socket.IO. It allows multiple users to draw and edit text together in the same session, without any signup required.
+# mirror
+mirror is a real-time collaborative canvas and text editor built with Next.js, React, and Socket.IO. It allows multiple users to draw and edit text together in the same session, without any signup required. 
 
 **Current Features:**
 
