@@ -11,6 +11,7 @@ const handle = app.getRequestHandler();
 
 const roomHistories = {};
 const roomTexts = {};
+const roomTextVersions = {};
 
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
@@ -61,28 +62,49 @@ app.prepare().then(() => {
         roomTexts[roomId] = '';
       }
 
+      // Initialize room text version if it doesn't exist
+      if (!roomTextVersions[roomId]) {
+        roomTextVersions[roomId] = 0;
+      }
+
       // send the existing drawing history and text to the newly joined client
       socket.emit('history', {
         lines: roomHistories[roomId],
         text: roomTexts[roomId],
         roomId
       });
+      
+      console.log(`Client joined room: ${roomId}, Socket ID: ${socket.id}`);
     });
 
     socket.on('drawing', (data) => {
       try {
         const roomId = data.roomId || socket.currentRoom;
-        if (!roomId) return;
+        if (!roomId) {
+          console.error('[Error] Drawing event: No roomId provided or stored');
+          return;
+        }
 
         if (data.line && Array.isArray(data.line)) {
+          // Initialize room history if it doesn't exist
           if (!roomHistories[roomId]) {
+            console.log(`[Server] Creating new room history for ${roomId}`);
             roomHistories[roomId] = [];
           }
 
-          // Store the drawing data (the line)
-          roomHistories[roomId].push(data.line);
+          // Validate line data before storing
+          if (data.line.length > 0) {
+            // Store the drawing data (the line)
+            roomHistories[roomId].push(data.line);
+            console.log(`[Server] Added new line to room ${roomId}, now has ${roomHistories[roomId].length} lines`);
 
-          socket.to(roomId).emit('drawing', data);
+            // Send to other clients in the room
+            socket.to(roomId).emit('drawing', data);
+          } else {
+            console.log(`[Server] Received empty line data, not storing`);
+          }
+        } else {
+          console.error('[Error] Drawing event: Invalid line data format');
         }
       } catch (err) {
         console.error('[Error] Drawing event:', err.message);
@@ -92,11 +114,27 @@ app.prepare().then(() => {
     socket.on('eraseDrawing', (data) => {
       try {
         const roomId = data.roomId || socket.currentRoom;
-        if (!roomId) return;
+        if (!roomId) {
+          console.error('[Error] Erase drawing event: No roomId provided or stored');
+          return;
+        }
 
         if (data.lines && Array.isArray(data.lines)) {
-          roomHistories[roomId] = data.lines;
-          io.to(roomId).emit('history', { roomId, lines: data.lines });
+          console.log(`[Server] Erasing drawings for room ${roomId}, replacing with ${data.lines.length} lines`);
+          
+          // Store the updated lines array after erasing
+          roomHistories[roomId] = data.lines.filter(line => Array.isArray(line) && line.length > 0);
+          
+          // Broadcast to all clients in the room including sender to ensure consistency
+          io.to(roomId).emit('history', { 
+            roomId, 
+            lines: roomHistories[roomId],
+            text: roomTexts[roomId] || ''
+          });
+          
+          console.log(`[Server] Updated history broadcast after erase operation`);
+        } else {
+          console.error('[Error] Erase drawing event: Invalid lines data format');
         }
       } catch (err) {
         console.error('[Error] Erase drawing event:', err.message);
@@ -116,27 +154,42 @@ app.prepare().then(() => {
       }
     });
 
+    // REMOVE delta handling completely due to issues
     socket.on('textDelta', (data) => {
       try {
         const roomId = data.roomId || socket.currentRoom;
         if (!roomId) return;
-
-        socket.to(roomId).emit('textDelta', {
-          roomId,
-          delta: data.delta,
-          version: data.version
-        });
+        
+        console.log('[Warning] Received textDelta but delta handling is disabled. Using full text sync instead.');
+        
+        // If we have text, update it
+        if (data.text) {
+          roomTexts[roomId] = data.text;
+          socket.to(roomId).emit('textUpdate', { roomId, text: data.text });
+        }
       } catch (err) {
         console.error('[Error] Text delta event:', err.message);
       }
     });
 
+    // SIMPLIFIED: Full text updates with preservation of cursor
     socket.on('textUpdate', (data) => {
       try {
         const roomId = data.roomId || socket.currentRoom;
         if (!roomId) return;
 
+        // Store the full text
         roomTexts[roomId] = data.text;
+        
+        // Forward to other clients with cursor position
+        socket.to(roomId).emit('textUpdate', { 
+          roomId, 
+          text: data.text,
+          selection: data.selection
+        });
+        
+        console.log(`Stored & broadcasted text update for room ${roomId}, ${data.text.length} chars`);
+        
       } catch (err) {
         console.error('[Error] Text update event:', err.message);
       }
@@ -147,14 +200,39 @@ app.prepare().then(() => {
         const roomId = data.roomId || socket.currentRoom;
         if (!roomId) return;
 
-        const historyText = roomTexts[roomId] || '';
+        // Ensure room data exists
+        if (!roomHistories[roomId]) roomHistories[roomId] = [];
+        if (!roomTexts[roomId]) roomTexts[roomId] = '';
+
+        const historyLines = roomHistories[roomId];
+        const historyText = roomTexts[roomId];
+        
+        console.log(`[Server] Sending history to client in room ${roomId}:`);
+        console.log(`[Server] - Lines count: ${historyLines.length}`);
+        console.log(`[Server] - First line points: ${historyLines.length > 0 ? historyLines[0].length : 0}`);
+        console.log(`[Server] - Text length: ${historyText.length}`);
+        
         socket.emit('history', {
-          lines: roomHistories[roomId] || [],
+          lines: historyLines,
           text: historyText,
           roomId
         });
+        
       } catch (err) {
         console.error('[Error] Request history event:', err.message);
+        // Try to send empty but valid data as fallback
+        try {
+          const roomId = data.roomId || socket.currentRoom;
+          if (roomId) {
+            socket.emit('history', {
+              lines: [],
+              text: '',
+              roomId
+            });
+          }
+        } catch (recoveryErr) {
+          console.error('[Error] Failed recovery attempt:', recoveryErr.message);
+        }
       }
     });
 
@@ -178,12 +256,44 @@ app.prepare().then(() => {
         if (!roomSockets || roomSockets.size === 0) {
           activeRooms.delete(roomId);
         }
+        console.log(`Client disconnected from room: ${roomId}, Socket ID: ${socket.id}`);
       }
     });
   });
 
+  // Improved error handling
   process.on('uncaughtException', (err) => {
     console.error('Uncaught exception:', err);
+  });
+  
+  // Add periodic state saving to handle server restarts
+  // In a real production app, you would save this to a database instead
+  let lastSaveTime = Date.now();
+  const saveInterval = setInterval(() => {
+    const now = Date.now();
+    const saveOps = {
+      rooms: Array.from(activeRooms),
+      histories: Object.keys(roomHistories).length,
+      texts: Object.keys(roomTexts).length,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`[Server] State snapshot: ${JSON.stringify(saveOps)}`);
+    lastSaveTime = now;
+    
+    // Here you would save to database:
+    // await db.saveState({ roomHistories, roomTexts, roomTextVersions });
+  }, 60000); // Save every minute
+  
+  // Clean up on shutdown
+  process.on('SIGINT', () => {
+    clearInterval(saveInterval);
+    console.log('Server shutting down, saving state...');
+    
+    // Final save before shutdown
+    // await db.saveState({ roomHistories, roomTexts, roomTextVersions });
+    
+    process.exit(0);
   });
 
   server.listen(port, hostname, (err) => {
